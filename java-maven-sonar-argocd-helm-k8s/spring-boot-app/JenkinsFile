@@ -1,5 +1,10 @@
 pipeline {
-  agent any   // Run directly on EC2, not inside a Docker agent
+  agent {
+    docker {
+      image 'maven:3.8.8-openjdk-11'      // Official Maven + Java image
+      args '--user root -v /var/run/docker.sock:/var/run/docker.sock'
+    }
+  }
   stages {
     stage('Checkout') {
       steps {
@@ -20,8 +25,10 @@ pipeline {
       steps {
         withCredentials([string(credentialsId: 'sonarqube', variable: 'SONAR_AUTH_TOKEN')]) {
           sh '''
-            cd java-maven-sonar-argocd-helm-k8s/spring-boot-app && \
-            mvn sonar:sonar -Dsonar.login=$SONAR_AUTH_TOKEN -Dsonar.host.url=${SONAR_URL}
+            cd java-maven-sonar-argocd-helm-k8s/spring-boot-app
+            mvn sonar:sonar \
+              -Dsonar.login=$SONAR_AUTH_TOKEN \
+              -Dsonar.host.url=${SONAR_URL}
           '''
         }
       }
@@ -30,37 +37,9 @@ pipeline {
     stage('Build and Push Docker Image') {
       environment {
         DOCKER_IMAGE = "rushireddy007/ultimate-cicd:${BUILD_NUMBER}"
+        REGISTRY_CREDENTIALS = credentials('docker-cred')
       }
       steps {
         script {
-          sh '''
-            cd java-maven-sonar-argocd-helm-k8s/spring-boot-app
-            docker build -t ${DOCKER_IMAGE} .
-            echo "Pushing image to Docker Hub..."
-            docker login -u $DOCKER_HUB_USER -p $DOCKER_HUB_PASS
-            docker push ${DOCKER_IMAGE}
-          '''
-        }
-      }
-    }
-
-    stage('Update Deployment File') {
-      environment {
-        GIT_REPO_NAME = "Jenkins-Zero-To-Hero"
-        GIT_USER_NAME = "rushi323"
-      }
-      steps {
-        withCredentials([string(credentialsId: 'github', variable: 'GITHUB_TOKEN')]) {
-          sh '''
-            git config user.email "rushibreddy@gmail.com"
-            git config user.name "rushi323"
-            sed -i "s/replaceImageTag/${BUILD_NUMBER}/g" java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
-            git add java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
-            git commit -m "Update deployment image to version ${BUILD_NUMBER}"
-            git push https://${GITHUB_TOKEN}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME} HEAD:main
-          '''
-        }
-      }
-    }
-  }
-}
+          sh 'cd java-maven-sonar-argocd-helm-k8s/spring-boot-app && docker build -t ${DOCKER_IMAGE} .'
+          def dockerImage = docker.image("${DOCKER_IMAGE}_
