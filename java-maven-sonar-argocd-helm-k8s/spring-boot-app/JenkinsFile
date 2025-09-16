@@ -1,8 +1,8 @@
 pipeline {
   agent {
     docker {
-      image 'maven:3.8.8-openjdk-11'      // Official Maven + Java image
-      args '--user root -v /var/run/docker.sock:/var/run/docker.sock'
+      image 'maven:3.8.8-eclipse-temurin-11'   // Correct Maven + Java 11 image
+      args '-v /var/run/docker.sock:/var/run/docker.sock'
     }
   }
   stages {
@@ -42,7 +42,7 @@ pipeline {
       steps {
         script {
           sh 'cd java-maven-sonar-argocd-helm-k8s/spring-boot-app && docker build -t ${DOCKER_IMAGE} .'
-          def dockerImage = docker.image("${DOCKER_IMAGE}")   // ✅ fixed (removed stray underscore)
+          def dockerImage = docker.image("${DOCKER_IMAGE}")
           docker.withRegistry('https://index.docker.io/v1/', "docker-cred") {
             dockerImage.push()
           }
@@ -61,13 +61,4 @@ pipeline {
             git config user.email "rushibreddy@gmail.com"
             git config user.name "rushi323"
             BUILD_NUMBER=${BUILD_NUMBER}
-            sed -i "s/replaceImageTag/${BUILD_NUMBER}/g" java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
-            git add java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
-            git commit -m "Update deployment image to version ${BUILD_NUMBER}"
-            git push https://${GITHUB_TOKEN}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME} HEAD:main
-          '''
-        }
-      }
-    }
-  }
-}
+            sed -i "s/replaceImageTag/${BUILD_NUMBER}/g" java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.y_
