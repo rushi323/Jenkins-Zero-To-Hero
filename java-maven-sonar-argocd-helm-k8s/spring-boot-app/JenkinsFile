@@ -1,35 +1,41 @@
 pipeline {
-  agent {
-    docker {
-      image 'maven:3.8.8-eclipse-temurin-17'   // Maven + JDK 17
-      args '-v /var/run/docker.sock:/var/run/docker.sock'
-    }
-  }
-
-  environment {
-    SONAR_URL = "http://18.188.129.155:9000"
-    DOCKER_IMAGE = "rushireddy007/ultimate-cicd:${BUILD_NUMBER}"
-    GIT_REPO_NAME = "Jenkins-Zero-To-Hero"
-    GIT_USER_NAME = "rushi323"
-  }
+  agent none   // we'll define agents per stage
 
   stages {
     stage('Checkout') {
+      agent {
+        docker {
+          image 'maven:3.8.8-eclipse-temurin-17'
+          args '-v /var/run/docker.sock:/var/run/docker.sock'
+        }
+      }
       steps {
         git branch: 'main', url: 'https://github.com/rushi323/Jenkins-Zero-To-Hero'
       }
     }
 
     stage('Build and Test') {
+      agent {
+        docker {
+          image 'maven:3.8.8-eclipse-temurin-17'
+          args '-v /var/run/docker.sock:/var/run/docker.sock'
+        }
+      }
       steps {
-        sh '''
-          cd java-maven-sonar-argocd-helm-k8s/spring-boot-app
-          mvn clean package -DskipTests
-        '''
+        sh 'cd java-maven-sonar-argocd-helm-k8s/spring-boot-app && mvn clean package'
       }
     }
 
     stage('Static Code Analysis') {
+      agent {
+        docker {
+          image 'maven:3.8.8-eclipse-temurin-17'
+          args '-v /var/run/docker.sock:/var/run/docker.sock'
+        }
+      }
+      environment {
+        SONAR_URL = "http://18.188.129.155:9000"
+      }
       steps {
         withCredentials([string(credentialsId: 'sonarqube', variable: 'SONAR_AUTH_TOKEN')]) {
           sh '''
@@ -43,6 +49,10 @@ pipeline {
     }
 
     stage('Build and Push Docker Image') {
+      agent any   // run directly on EC2 host (Docker available here)
+      environment {
+        DOCKER_IMAGE = "rushireddy007/ultimate-cicd:${BUILD_NUMBER}"
+      }
       steps {
         script {
           sh '''
@@ -58,17 +68,20 @@ pipeline {
     }
 
     stage('Update Deployment File') {
+      agent any
+      environment {
+        GIT_REPO_NAME = "Jenkins-Zero-To-Hero"
+        GIT_USER_NAME = "rushi323"
+      }
       steps {
         withCredentials([string(credentialsId: 'github', variable: 'GITHUB_TOKEN')]) {
           sh '''
             git config user.email "rushibreddy@gmail.com"
             git config user.name "rushi323"
-
             sed -i "s/replaceImageTag/${BUILD_NUMBER}/g" java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
-
             git add java-maven-sonar-argocd-helm-k8s/spring-boot-app-manifests/deployment.yml
             git commit -m "Update deployment image to version ${BUILD_NUMBER}"
-            git push https://${GITHUB_TOKEN}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME}.git HEAD:main
+            git push https://${GITHUB_TOKEN}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME} HEAD:main
           '''
         }
       }
