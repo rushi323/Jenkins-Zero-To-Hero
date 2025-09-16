@@ -1,12 +1,6 @@
 pipeline {
-  agent {
-    docker {
-      image 'maven:3.8.8-eclipse-temurin-17'   // ✅ Java 17 + Maven
-      args '-v /var/run/docker.sock:/var/run/docker.sock'
-    }
-  }
+  agent any   // run on EC2 host directly (where docker is installed)
   stages {
-
     stage('Checkout') {
       steps {
         git branch: 'main', url: 'https://github.com/rushi323/Jenkins-Zero-To-Hero'
@@ -15,10 +9,7 @@ pipeline {
 
     stage('Build and Test') {
       steps {
-        sh '''
-          cd java-maven-sonar-argocd-helm-k8s/spring-boot-app
-          mvn clean package
-        '''
+        sh 'cd java-maven-sonar-argocd-helm-k8s/spring-boot-app && mvn clean package'
       }
     }
 
@@ -31,7 +22,7 @@ pipeline {
           sh '''
             cd java-maven-sonar-argocd-helm-k8s/spring-boot-app
             mvn org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar \
-              -Dsonar.login=$SONAR_AUTH_TOKEN \
+              -Dsonar.token=$SONAR_AUTH_TOKEN \
               -Dsonar.host.url=${SONAR_URL}
           '''
         }
@@ -44,13 +35,9 @@ pipeline {
       }
       steps {
         script {
-          sh '''
-            cd java-maven-sonar-argocd-helm-k8s/spring-boot-app
-            docker build -t ${DOCKER_IMAGE} .
-          '''
-          def dockerImage = docker.image("${DOCKER_IMAGE}")
+          sh 'cd java-maven-sonar-argocd-helm-k8s/spring-boot-app && docker build -t ${DOCKER_IMAGE} .'
           docker.withRegistry('https://index.docker.io/v1/', "docker-cred") {
-            dockerImage.push()
+            sh "docker push ${DOCKER_IMAGE}"
           }
         }
       }
